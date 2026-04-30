@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 interface AuthContextType {
-  user: any;
+  driver: any;
   login: (userData: any) => void;
   logout: () => void;
 }
@@ -9,13 +9,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<any>(null);
+  const [driver, setDriver] = useState<any>(null);
 
-  const login = (userData: any) => setUser(userData);
-  const logout = () => setUser(null);
+  const login = (userData: any) => setDriver(userData);
+  const logout = () => setDriver(null);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ driver, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

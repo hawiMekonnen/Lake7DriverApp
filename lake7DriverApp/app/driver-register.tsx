@@ -11,8 +11,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
+import { styles } from '@/styles/driverRegister.style';
 
-const API_BASE_URL = 'http://localhost:5260';   
+const API_BASE_URL = 'http://192.168.137.218:5260';   
 
 export default function DriverRegisterScreen() {
   const [name, setName] = useState('');
@@ -26,14 +27,31 @@ export default function DriverRegisterScreen() {
 
   const router = useRouter();
 
+  const validateEmail = (email: string) => {
+    return email.endsWith('@gmail.com');
+  };
+
+  const validatePassword = (password: string) => {
+    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{6,}$/;
+    return regex.test(password);
+  };
+
   const handleSignup = async () => {
     if (!name || !email || !password || !phoneNumber || !vehicleInfo || !licensePlate || !vehicleType) {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+    if (!validateEmail(email)) {
+      Alert.alert('Error', 'Email must be a valid Gmail address (e.g., driver@gmail.com)');
+      return;
+    }
+
+    if (!validatePassword(password)) {
+      Alert.alert(
+        'Error',
+        'Password must be at least 6 characters and include uppercase, lowercase, number, and symbol'
+      );
       return;
     }
 
@@ -50,15 +68,11 @@ export default function DriverRegisterScreen() {
         vehicleType,
       });
 
-      // SUCCESS MESSAGE - Clear and friendly
       Alert.alert(
         "🎉 Registration Successful!", 
         "Your driver account has been created successfully.\n\nPlease login to start accepting rides and deliveries.",
         [
-          { 
-            text: "Go to Login", 
-            onPress: () => router.replace('/login') 
-          }
+          { text: "Go to Login", onPress: () => router.replace('/login') }
         ]
       );
 
@@ -105,50 +119,3 @@ export default function DriverRegisterScreen() {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 30,
-    color: '#1e2937',
-  },
-  input: {
-    height: 52,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-    fontSize: 16,
-    backgroundColor: '#f8fafc',
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  linkText: {
-    textAlign: 'center',
-    marginTop: 25,
-    color: '#2563eb',
-    fontSize: 16,
-  },
-});
