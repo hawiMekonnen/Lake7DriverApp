@@ -8,7 +8,7 @@ import { styles } from '@/styles/mainScreen.style';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_BASE_URL = 'http://192.168.137.218:5260';
+const API_BASE_URL = 'http://192.168.137.234:5260';
 
 export default function MainScreen() {
   const { driver } = useAuth();
@@ -17,9 +17,13 @@ export default function MainScreen() {
   const [connection, setConnection] = useState<any>(null);
   const [rideRequests, setRideRequests] = useState<any[]>([]);
   const [activeRide, setActiveRide] = useState<any>(null);
+  const [activeOrder, setActiveOrder] = useState<any>(null);
 
   // Fetch nearby pending rides
   const fetchNearbyRides = async (lat: number, lon: number) => {
+    if (driver?.vehicleType === 'Delivery') {
+      return; // Cyclists (Delivery) do not accept rides
+    }
     try {
       const response = await axios.get(`${API_BASE_URL}/api/Ride/nearby-pending?latitude=${lat}&longitude=${lon}&radiusKm=10`, {
         headers: { Authorization: `Bearer ${driver.token}` }
@@ -37,8 +41,8 @@ export default function MainScreen() {
       await axios.post(`${API_BASE_URL}/api/Driver/${driver.driverId}/location`, {
         latitude: lat,
         longitude: lon,
-        licensePlate: 'N/A',
-        vehicleType: 'N/A'
+        licensePlate: driver.licensePlate || 'N/A',
+        vehicleType: driver.vehicleType || 'N/A'
       }, {
         headers: { Authorization: `Bearer ${driver.token}` }
       });
@@ -119,12 +123,22 @@ export default function MainScreen() {
         .build();
 
       hubConnection.on('RideRequested', (rideData) => {
+        if (rideData.vehicleType !== driver?.vehicleType) {
+          return; // Only show ride requests that match driver's vehicle/ride option!
+        }
         console.log('New ride request via SignalR:', rideData);
         setRideRequests((prev) => {
           if (prev.find(r => r.id === rideData.id)) return prev;
           return [rideData, ...prev];
         });
       });
+
+      hubConnection.on('OrderAssigned', (orderData) => {
+        console.log('New order assigned via SignalR:', orderData);
+        setActiveOrder(orderData);
+        Alert.alert('New Order Assigned', 'You have a new food delivery. Pick it up from the restaurant.');
+      });
+
 
       hubConnection.on('Registered', (driverId) => {
         console.log('Driver registered in hub:', driverId);
@@ -148,6 +162,26 @@ export default function MainScreen() {
       connection?.stop();
     };
   }, [driver?.token]);
+
+  const handleUpdateOrderStatus = async (orderId: string, status: number) => {
+    try {
+      // OrderStatus enums in backend: Received=2, Prepared=3, OutForDelivery=4, Delivered=5, Completed=6
+      await axios.patch(`${API_BASE_URL}/api/Order/${orderId}/status?status=${status}`, {}, {
+        headers: { Authorization: `Bearer ${driver.token}` }
+      });
+      
+      if (status === 5 || status === 6) {
+        setActiveOrder(null);
+        Alert.alert('Success', 'Order delivered!');
+      } else {
+        // Refresh active order status
+        setActiveOrder((prev: any) => ({ ...prev, status }));
+      }
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      Alert.alert('Error', 'Could not update order status.');
+    }
+  };
 
   const handleAcceptRide = async (rideId: string) => {
     try {
@@ -198,7 +232,7 @@ export default function MainScreen() {
             title="You"
           >
             <View style={styles.markerContainer}>
-              <Ionicons name="car" size={24} color="#004AAD" />
+              <Ionicons name={driver?.vehicleType === 'Delivery' ? 'bicycle' : 'car'} size={24} color="#004AAD" />
             </View>
           </Marker>
 
@@ -230,7 +264,7 @@ export default function MainScreen() {
 
       <View style={styles.requestsContainer}>
         <Text style={styles.requestsTitle}>
-          {activeRide ? 'Ride in Progress' : 'Available Requests'}
+          {activeRide || activeOrder ? 'Job in Progress' : 'Available Requests'}
         </Text>
         
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -256,6 +290,36 @@ export default function MainScreen() {
               >
                 <Text style={styles.buttonText}>Complete Ride</Text>
               </TouchableOpacity>
+            </View>
+          ) : activeOrder ? (
+            <View style={styles.requestBox}>
+              <Text style={styles.requestText}>
+                <Text style={styles.label}>Restaurant: </Text>{activeOrder.senderName || activeOrder.pickupAddress}
+              </Text>
+              <Text style={styles.requestText}>
+                <Text style={styles.label}>Deliver to: </Text>{activeOrder.receiverName || activeOrder.dropoffAddress}
+              </Text>
+              <Text style={styles.requestText}>
+                <Text style={styles.label}>Items: </Text>{activeOrder.itemDescription}
+              </Text>
+              
+              <View style={styles.buttonContainer}>
+                {activeOrder.status === 3 ? ( // Prepared
+                   <TouchableOpacity 
+                    style={[styles.acceptButton, { backgroundColor: '#f59e0b' }]} 
+                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 4)} // Set to OutForDelivery
+                  >
+                    <Text style={styles.buttonText}>Pick Up Order</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity 
+                    style={[styles.completeButton, { backgroundColor: '#10b981' }]} 
+                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 5)} // Set to Delivered
+                  >
+                    <Text style={styles.buttonText}>Mark as Delivered</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           ) : rideRequests.length === 0 ? (
             <Text style={styles.noRequests}>Looking for nearby rides...</Text>

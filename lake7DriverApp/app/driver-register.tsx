@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
+import { Ionicons } from '@expo/vector-icons';
 import { styles } from '@/styles/driverRegister.style';
 
-const API_BASE_URL = 'http://192.168.137.218:5260';   
+const API_BASE_URL = 'http://192.168.137.234:5260';   
 
 export default function DriverRegisterScreen() {
   const [name, setName] = useState('');
@@ -22,7 +23,8 @@ export default function DriverRegisterScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [vehicleInfo, setVehicleInfo] = useState('');
   const [licensePlate, setLicensePlate] = useState('');
-  const [vehicleType, setVehicleType] = useState('');
+  const [vehicleType, setVehicleType] = useState('Car'); // default to Car
+  const [carCategory, setCarCategory] = useState('Economy'); // Economy, Classic, Premium
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
@@ -37,7 +39,12 @@ export default function DriverRegisterScreen() {
   };
 
   const handleSignup = async () => {
-    if (!name || !email || !password || !phoneNumber || !vehicleInfo || !licensePlate || !vehicleType) {
+    // If Cycle, we ensure details are pre-filled
+    const finalVehicleInfo = vehicleType === 'Cycle' ? 'Bicycle' : vehicleInfo;
+    const finalLicensePlate = vehicleType === 'Cycle' ? 'N/A' : licensePlate;
+    const finalVehicleType = vehicleType === 'Cycle' ? 'Delivery' : carCategory;
+
+    if (!name || !email || !password || !phoneNumber || !finalVehicleInfo || !finalLicensePlate || !finalVehicleType) {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
@@ -63,14 +70,14 @@ export default function DriverRegisterScreen() {
         email,
         password,
         phoneNumber,
-        vehicleInfo,
-        licensePlate,
-        vehicleType,
+        vehicleInfo: finalVehicleInfo,
+        licensePlate: finalLicensePlate,
+        vehicleType: finalVehicleType,
       });
 
       Alert.alert(
         "🎉 Registration Successful!", 
-        "Your driver account has been created successfully.\n\nPlease login to start accepting rides and deliveries.",
+        `Your driver account has been created successfully as a ${finalVehicleType} partner.\n\nPlease login to start working.`,
         [
           { text: "Go to Login", onPress: () => router.replace('/login') }
         ]
@@ -91,14 +98,68 @@ export default function DriverRegisterScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Become a Driver</Text>
+      <Text style={styles.title}>Become a Partner</Text>
 
       <TextInput style={styles.input} placeholder="Full Name" value={name} onChangeText={setName} />
       <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
       <TextInput style={styles.input} placeholder="Phone Number" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" />
-      <TextInput style={styles.input} placeholder="Vehicle Info (e.g. Toyota Corolla 2018)" value={vehicleInfo} onChangeText={setVehicleInfo} />
-      <TextInput style={styles.input} placeholder="License Plate" value={licensePlate} onChangeText={setLicensePlate} />
-      <TextInput style={styles.input} placeholder="Vehicle Type (Car, Bike, etc.)" value={vehicleType} onChangeText={setVehicleType} />
+      
+      <Text style={styles.sectionLabel}>Select Your Vehicle / Role</Text>
+      <View style={styles.roleContainer}>
+        <TouchableOpacity 
+          style={[styles.roleCard, vehicleType === 'Car' && styles.roleCardActive]} 
+          onPress={() => {
+            setVehicleType('Car');
+            if (vehicleInfo === 'Bicycle') setVehicleInfo('');
+            if (licensePlate === 'N/A') setLicensePlate('');
+          }}
+        >
+          <Ionicons name="car" size={32} color={vehicleType === 'Car' ? '#2563eb' : '#64748b'} />
+          <Text style={[styles.roleText, vehicleType === 'Car' && styles.roleTextActive]}>Car (Rides)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.roleCard, vehicleType === 'Cycle' && styles.roleCardActive]} 
+          onPress={() => {
+            setVehicleType('Cycle');
+            setVehicleInfo('Bicycle');
+            setLicensePlate('N/A');
+          }}
+        >
+          <Ionicons name="bicycle" size={32} color={vehicleType === 'Cycle' ? '#2563eb' : '#64748b'} />
+          <Text style={[styles.roleText, vehicleType === 'Cycle' && styles.roleTextActive]}>Cycle (Food Delivery)</Text>
+        </TouchableOpacity>
+      </View>
+
+      {vehicleType === 'Cycle' && (
+        <Text style={styles.infoText}>* Note: For Cyclist role, Vehicle Info is preset to "Bicycle" and License Plate is preset to "N/A" (Delivery Category).</Text>
+      )}
+
+      {vehicleType === 'Car' && (
+        <>
+          <Text style={styles.sectionLabel}>Select Ride Category</Text>
+          <View style={styles.roleContainer}>
+            {['Economy', 'Classic', 'Premium'].map((cat) => (
+              <TouchableOpacity 
+                key={cat}
+                style={[styles.roleCard, carCategory === cat && styles.roleCardActive]} 
+                onPress={() => setCarCategory(cat)}
+              >
+                <Ionicons 
+                  name={cat === 'Economy' ? 'car' : cat === 'Classic' ? 'car-sport' : 'shield-checkmark'} 
+                  size={28} 
+                  color={carCategory === cat ? '#2563eb' : '#64748b'} 
+                />
+                <Text style={[styles.roleText, carCategory === cat && styles.roleTextActive]}>{cat}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TextInput style={styles.input} placeholder="Vehicle Info (e.g. Toyota Corolla 2018)" value={vehicleInfo} onChangeText={setVehicleInfo} />
+          <TextInput style={styles.input} placeholder="License Plate" value={licensePlate} onChangeText={setLicensePlate} />
+        </>
+      )}
+
       <TextInput style={styles.input} placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
 
       <TouchableOpacity 
@@ -109,7 +170,7 @@ export default function DriverRegisterScreen() {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Register as Driver</Text>
+          <Text style={styles.buttonText}>Register Partner</Text>
         )}
       </TouchableOpacity>
 

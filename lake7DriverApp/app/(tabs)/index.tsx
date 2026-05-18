@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -8,15 +8,21 @@ import {
   StyleSheet, 
   Dimensions 
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../src/context/AuthContext';
 import { styles } from '@/styles/index.style';
 
 const { width } = Dimensions.get('window');
 
 export default function DriverHomeScreen() {
   const router = useRouter();
+  const { driver } = useAuth();
   const [isPressed, setIsPressed] = useState(false);
+
+  if (!driver) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -31,21 +37,21 @@ export default function DriverHomeScreen() {
 
       {/* Welcome Text */}
       <View style={styles.textContainer}>
-        <Text style={styles.welcomeText}>Welcome Back, Driver!</Text>
+        <Text style={styles.welcomeText}>Welcome Back, {driver?.name || 'Driver'}!</Text>
         <Text style={styles.subtitle}>
           Ready to earn today?{'\n'}Accept rides and deliveries
         </Text>
       </View>
 
-      {/* Login Button */}
+      {/* Look for Ride Requests Button */}
       <TouchableOpacity 
         style={styles.loginButton}
         onPressIn={() => setIsPressed(true)}
         onPressOut={() => setIsPressed(false)}
-        onPress={() => router.push('/login')}
+        onPress={() => router.push('/main-screen')}
       >
-        <Ionicons name="log-in-outline" size={24} color="#fff" style={styles.buttonIcon} />
-        <Text style={styles.loginButtonText}>Login to Start Earning</Text>
+        <Ionicons name="reader-outline" size={24} color="#fff" style={styles.buttonIcon} />
+        <Text style={styles.loginButtonText}>Look for Ride Requests</Text>
       </TouchableOpacity>
 
       {/* Info Cards */}
@@ -65,4 +71,3 @@ export default function DriverHomeScreen() {
     </ScrollView>
   );
 }
-

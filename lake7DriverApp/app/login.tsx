@@ -16,7 +16,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      const endpoint = 'http://192.168.137.218:5260/api/driver/login';
+      const endpoint = 'http://192.168.137.234:5260/api/driver/login';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,10 +30,10 @@ export default function LoginScreen() {
       if (data.token) {
         console.log('JWT Token:', data.token);
         login(data); // store token and driver info in context
-        router.replace('/main-screen' as any); 
+        router.replace('/(tabs)' as any); 
       } else {
         Alert.alert('Login failed', 'No token returned');
-      }218
+      }
     } catch (err: any) {
       Alert.alert('Login failed', err.message);
     }

@@ -72,12 +72,12 @@ export const styles = StyleSheet.create({
   },
   
   acceptButton: { 
-    backgroundColor: '#10b981', 
+    backgroundColor: PRIMARY_BLUE, 
     paddingVertical: 15, 
     borderRadius: 14, 
     flex: 1, 
     alignItems: 'center',
-    shadowColor: '#10b981',
+    shadowColor: PRIMARY_BLUE,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
