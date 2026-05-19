@@ -19,6 +19,39 @@ export default function MainScreen() {
   const [activeRide, setActiveRide] = useState<any>(null);
   const [activeOrder, setActiveOrder] = useState<any>(null);
 
+  const fetchActiveOrder = async () => {
+    if (!driver?.driverId) return;
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/Order/driver/${driver.driverId}/active`, {
+        headers: { Authorization: `Bearer ${driver.token}` }
+      });
+      if (response.data) {
+        console.log('Fetched active order:', response.data);
+        setActiveOrder(response.data);
+      }
+    } catch (error) {
+      console.log('No active order found or error fetching it');
+    }
+  };
+
+  const formatItemDescription = (description: string) => {
+    try {
+      const parsed = JSON.parse(description);
+      if (parsed && parsed.items) {
+        return parsed.items.map((item: any) => `${item.quantity}x ${item.name}`).join(', ');
+      }
+    } catch (e) {
+      // Not JSON
+    }
+    return description;
+  };
+
+  useEffect(() => {
+    if (driver?.driverId) {
+      fetchActiveOrder();
+    }
+  }, [driver?.driverId]);
+
   // Fetch nearby pending rides
   const fetchNearbyRides = async (lat: number, lon: number) => {
     if (driver?.vehicleType === 'Delivery') {
@@ -137,6 +170,16 @@ export default function MainScreen() {
         console.log('New order assigned via SignalR:', orderData);
         setActiveOrder(orderData);
         Alert.alert('New Order Assigned', 'You have a new food delivery. Pick it up from the restaurant.');
+      });
+
+      hubConnection.on('OrderPrepared', (orderData) => {
+        if (driver?.vehicleType === 'Delivery' && !activeOrder) {
+          console.log('Order prepared alert:', orderData);
+          Alert.alert(
+            'Food Ready for Pickup',
+            `An order is ready at ${orderData.senderName || orderData.pickupAddress || 'the restaurant'}.`
+          );
+        }
       });
 
 
@@ -294,27 +337,34 @@ export default function MainScreen() {
           ) : activeOrder ? (
             <View style={styles.requestBox}>
               <Text style={styles.requestText}>
-                <Text style={styles.label}>Restaurant: </Text>{activeOrder.senderName || activeOrder.pickupAddress}
+                <Text style={styles.label}>Restaurant: </Text>{activeOrder.senderName || activeOrder.pickupAddress || activeOrder.delivery?.pickupAddress}
               </Text>
               <Text style={styles.requestText}>
-                <Text style={styles.label}>Deliver to: </Text>{activeOrder.receiverName || activeOrder.dropoffAddress}
+                <Text style={styles.label}>Deliver to: </Text>{activeOrder.receiverName || activeOrder.dropoffAddress || activeOrder.delivery?.dropoffAddress}
               </Text>
               <Text style={styles.requestText}>
-                <Text style={styles.label}>Items: </Text>{activeOrder.itemDescription}
+                <Text style={styles.label}>Items: </Text>{formatItemDescription(activeOrder.itemDescription || activeOrder.delivery?.itemDescription || '')}
               </Text>
               
               <View style={styles.buttonContainer}>
-                {activeOrder.status === 3 ? ( // Prepared
-                   <TouchableOpacity 
-                    style={[styles.acceptButton, { backgroundColor: '#f59e0b' }]} 
-                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 4)} // Set to OutForDelivery
+                {(activeOrder.delivery?.status === 0 || activeOrder.delivery?.status === 'Pending') ? (
+                  <TouchableOpacity 
+                    style={[styles.acceptButton, { backgroundColor: '#004AAD', flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }]} 
+                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 4)} // Set to OutForDelivery (4) which automatically sets delivery.Status = RideStatus.Accepted
+                  >
+                    <Text style={styles.buttonText}>Accept Delivery Job</Text>
+                  </TouchableOpacity>
+                ) : (activeOrder.status === 3 || activeOrder.status === 'Prepared' || activeOrder.status === 2 || activeOrder.status === 'Received') ? (
+                  <TouchableOpacity 
+                    style={[styles.acceptButton, { backgroundColor: '#f59e0b', flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }]} 
+                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 4)} // Set to OutForDelivery (4)
                   >
                     <Text style={styles.buttonText}>Pick Up Order</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity 
-                    style={[styles.completeButton, { backgroundColor: '#10b981' }]} 
-                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 5)} // Set to Delivered
+                    style={[styles.completeButton, { backgroundColor: '#10b981', flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }]} 
+                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 5)} // Set to Delivered (5)
                   >
                     <Text style={styles.buttonText}>Mark as Delivered</Text>
                   </TouchableOpacity>
