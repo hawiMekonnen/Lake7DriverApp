@@ -14,7 +14,7 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '@/styles/driverRegister.style';
 
-const API_BASE_URL = 'http://192.168.137.234:5260';   
+const API_BASE_URL = 'http://10.246.207.228:5260';   
 
 export default function DriverRegisterScreen() {
   const [name, setName] = useState('');
@@ -76,10 +76,10 @@ export default function DriverRegisterScreen() {
       });
 
       Alert.alert(
-        "🎉 Registration Successful!", 
-        `Your driver account has been created successfully as a ${finalVehicleType} partner.\n\nPlease login to start working.`,
+        "📋 Registration Submitted!", 
+        `Your application as a ${finalVehicleType} partner has been submitted.\n\nYour account is pending admin approval. You will be able to log in once an admin verifies your registration.`,
         [
-          { text: "Go to Login", onPress: () => router.replace('/login') }
+          { text: "OK", onPress: () => router.replace('/login') }
         ]
       );
 

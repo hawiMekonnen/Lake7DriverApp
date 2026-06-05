@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { useAuth } from '../../src/context/AuthContext';
 
-const API_BASE_URL = 'http://192.168.137.234:5260';
+const API_BASE_URL = 'http://10.246.207.228:5260';
 
 export default function DriverProfileScreen() {
   const router = useRouter();

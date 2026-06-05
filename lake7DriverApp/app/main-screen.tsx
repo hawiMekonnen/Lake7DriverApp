@@ -7,17 +7,45 @@ import { useAuth } from '../src/context/AuthContext';
 import { styles } from '@/styles/mainScreen.style';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
-const API_BASE_URL = 'http://192.168.137.234:5260';
+const API_BASE_URL = 'http://10.246.207.228:5260';
 
 export default function MainScreen() {
   const { driver } = useAuth();
+  const router = useRouter();
   const mapRef = useRef<MapView>(null);
   const [location, setLocation] = useState<any>(null);
   const [connection, setConnection] = useState<any>(null);
   const [rideRequests, setRideRequests] = useState<any[]>([]);
   const [activeRide, setActiveRide] = useState<any>(null);
   const [activeOrder, setActiveOrder] = useState<any>(null);
+
+  const fetchActiveRide = async () => {
+    if (!driver?.driverId) return;
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/Ride/getAll`, {
+        headers: { Authorization: `Bearer ${driver.token}` }
+      });
+      const active = response.data.find((r: any) => 
+        r.driverId === driver.driverId && 
+        (r.status === 1 || r.status === 2 || r.status === 'Accepted' || r.status === 'InProgress')
+      );
+      if (active) {
+        console.log('Fetched active ride:', active);
+        setActiveRide(active);
+        if (active.status === 2 || active.status === 'InProgress') {
+          router.push({
+            // cast pathname to any to satisfy route union types when dynamic route isn't in the union
+            pathname: '/active-ride' as any,
+            params: { ride: JSON.stringify(active) }
+          });
+        }
+      }
+    } catch (error) {
+      console.log('Error fetching active ride:', error);
+    }
+  };
 
   const fetchActiveOrder = async () => {
     if (!driver?.driverId) return;
@@ -49,6 +77,7 @@ export default function MainScreen() {
   useEffect(() => {
     if (driver?.driverId) {
       fetchActiveOrder();
+      fetchActiveRide();
     }
   }, [driver?.driverId]);
 
@@ -151,12 +180,33 @@ export default function MainScreen() {
         .withUrl(`${API_BASE_URL}/driverHub`, {
           accessTokenFactory: () => driver.token,
         })
-        .configureLogging(LogLevel.Information)
+        .configureLogging(LogLevel.None)
         .withAutomaticReconnect()
         .build();
 
+
+
+      hubConnection.onclose(async (error) => {
+        console.log('SignalR connection closed silently, will try to reconnect...', error);
+        setTimeout(async () => {
+          if (hubConnection.state === 'Disconnected') {
+            try {
+              await hubConnection.start();
+              if (driver?.driverId) {
+                await hubConnection.invoke('RegisterDriver', driver.driverId);
+              }
+            } catch (e) {
+              console.log('Silent reconnect failed');
+            }
+          }
+        }, 5000);
+      });
+
       hubConnection.on('RideRequested', (rideData) => {
-        if (rideData.vehicleType !== driver?.vehicleType) {
+        const rideVehicleType = rideData.vehicleType?.toLowerCase();
+        const driverVehicleType = driver?.vehicleType?.toLowerCase();
+        
+        if (rideVehicleType !== driverVehicleType) {
           return; // Only show ride requests that match driver's vehicle/ride option!
         }
         console.log('New ride request via SignalR:', rideData);
@@ -241,6 +291,25 @@ export default function MainScreen() {
     }
   };
 
+  const handleStartRide = async (rideId: string) => {
+    try {
+      const response = await axios.patch(`${API_BASE_URL}/api/Ride/${rideId}/transition?newStatus=2`, {}, {
+        headers: { Authorization: `Bearer ${driver.token}` }
+      });
+      
+      const updatedRide = response.data;
+      setActiveRide(updatedRide);
+      Alert.alert('Ride Started', 'Navigate to destination.');
+      router.push({
+        pathname: '/active-ride',
+        params: { ride: JSON.stringify(updatedRide) }
+      });
+    } catch (error) {
+      console.error('Error starting ride:', error);
+      Alert.alert('Error', 'Could not start ride.');
+    }
+  };
+
   const handleCompleteRide = async (rideId: string) => {
     try {
       await axios.patch(`${API_BASE_URL}/api/Ride/${rideId}/transition?newStatus=3`, {}, {
@@ -290,14 +359,16 @@ export default function MainScreen() {
                   <Ionicons name="location" size={24} color="#10b981" />
                 </View>
               </Marker>
-              <Marker
-                coordinate={{ latitude: activeRide.dropoffLatitude, longitude: activeRide.dropoffLongitude }}
-                title="Dropoff"
-              >
-                <View style={[styles.markerContainer, { borderColor: '#ef4444' }]}>
-                  <Ionicons name="flag" size={24} color="#ef4444" />
-                </View>
-              </Marker>
+              {(activeRide.status === 2 || activeRide.status === 'InProgress') && (
+                <Marker
+                  coordinate={{ latitude: activeRide.dropoffLatitude, longitude: activeRide.dropoffLongitude }}
+                  title="Dropoff"
+                >
+                  <View style={[styles.markerContainer, { borderColor: '#ef4444' }]}>
+                    <Ionicons name="flag" size={24} color="#ef4444" />
+                  </View>
+                </Marker>
+              )}
             </>
           )}
         </MapView>
@@ -327,12 +398,21 @@ export default function MainScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity 
-                style={styles.completeButton} 
-                onPress={() => handleCompleteRide(activeRide.id)}
-              >
-                <Text style={styles.buttonText}>Complete Ride</Text>
-              </TouchableOpacity>
+{(activeRide.status === 2 || activeRide.status === 'InProgress') ? (
+    <TouchableOpacity
+        style={[styles.completeButton, { backgroundColor: '#004AAD' }]}
+        onPress={() => handleStartRide(activeRide.id)}
+    >
+        <Text style={styles.buttonText}>Start Ride</Text>
+    </TouchableOpacity>
+) : (
+    <TouchableOpacity
+        style={[styles.completeButton, { backgroundColor: '#004AAD' }]}
+        onPress={() => handleStartRide(activeRide.id)}
+    >
+        <Text style={styles.buttonText}>Start Ride</Text>
+    </TouchableOpacity>
+)}
             </View>
           ) : activeOrder ? (
             <View style={styles.requestBox}>

@@ -16,7 +16,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      const endpoint = 'http://192.168.137.234:5260/api/driver/login';
+      const endpoint = 'http://10.246.207.228:5260/api/driver/login';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -24,6 +24,14 @@ export default function LoginScreen() {
       });
       if (!response.ok) {
         const error = await response.text();
+        if (response.status === 403) {
+          Alert.alert(
+            '⏳ Pending Approval',
+            'Your account is pending admin approval. You will be able to log in once an admin verifies your registration.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
         throw new Error(error);
       }
       const data = await response.json();
