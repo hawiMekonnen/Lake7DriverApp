@@ -14,7 +14,7 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '@/styles/driverRegister.style';
 
-const API_BASE_URL = 'http://10.246.207.228:5260';   
+const API_BASE_URL = 'http://10.255.49.59:5260';   
 
 export default function DriverRegisterScreen() {
   const [name, setName] = useState('');

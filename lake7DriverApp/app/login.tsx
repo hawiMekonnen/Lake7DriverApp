@@ -16,7 +16,7 @@ export default function LoginScreen() {
       return;
     }
     try {
-      const endpoint = 'http://10.246.207.228:5260/api/driver/login';
+      const endpoint = 'http://10.255.49.59:5260/api/driver/login';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

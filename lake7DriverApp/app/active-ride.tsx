@@ -7,7 +7,7 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../src/context/AuthContext';
 
-const API_BASE_URL = 'http://10.246.207.228:5260';
+const API_BASE_URL = 'http://10.255.49.59:5260';
 const { width, height } = Dimensions.get('window');
 
 export default function ActiveRideScreen() {
@@ -36,13 +36,34 @@ export default function ActiveRideScreen() {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/map/directions`, {
         params: {
-          origin: `${ride.pickupLongitude},${ride.pickupLatitude}`,
-          destination: `${ride.dropoffLongitude},${ride.dropoffLatitude}`,
+          origin: `${ride.pickupLatitude},${ride.pickupLongitude}`,
+          destination: `${ride.dropoffLatitude},${ride.dropoffLongitude}`,
         },
       });
       setRouteCoords(response.data);
+
+      // Fit map to show both pickup and dropoff
+      setTimeout(() => {
+        mapRef.current?.fitToCoordinates(
+          [
+            { latitude: ride.pickupLatitude, longitude: ride.pickupLongitude },
+            { latitude: ride.dropoffLatitude, longitude: ride.dropoffLongitude },
+          ],
+          { edgePadding: { top: 120, right: 60, bottom: 60, left: 60 }, animated: true }
+        );
+      }, 500);
     } catch (error) {
       console.log("Route error:", error);
+      // Even if route fails, still fit map to show both markers
+      setTimeout(() => {
+        mapRef.current?.fitToCoordinates(
+          [
+            { latitude: ride.pickupLatitude, longitude: ride.pickupLongitude },
+            { latitude: ride.dropoffLatitude, longitude: ride.dropoffLongitude },
+          ],
+          { edgePadding: { top: 120, right: 60, bottom: 60, left: 60 }, animated: true }
+        );
+      }, 500);
     } finally {
       setLoading(false);
     }
@@ -161,10 +182,10 @@ export default function ActiveRideScreen() {
           provider={PROVIDER_GOOGLE}
           style={styles.map}
           initialRegion={{
-            latitude: ride.pickupLatitude,
-            longitude: ride.pickupLongitude,
-            latitudeDelta: 0.03,
-            longitudeDelta: 0.03,
+            latitude: (ride.pickupLatitude + ride.dropoffLatitude) / 2,
+            longitude: (ride.pickupLongitude + ride.dropoffLongitude) / 2,
+            latitudeDelta: Math.abs(ride.pickupLatitude - ride.dropoffLatitude) * 2 + 0.02,
+            longitudeDelta: Math.abs(ride.pickupLongitude - ride.dropoffLongitude) * 2 + 0.02,
           }}
         >
           {/* Pickup Marker */}

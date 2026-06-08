@@ -9,7 +9,7 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-const API_BASE_URL = 'http://10.246.207.228:5260';
+const API_BASE_URL = 'http://10.255.49.59:5260';
 
 export default function MainScreen() {
   const { driver } = useAuth();
