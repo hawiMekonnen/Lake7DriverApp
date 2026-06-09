@@ -81,18 +81,23 @@ export default function MainScreen() {
     }
   }, [driver?.driverId]);
 
-  // Fetch nearby pending rides
-  const fetchNearbyRides = async (lat: number, lon: number) => {
-    if (driver?.vehicleType === 'Delivery') {
-      return; // Cyclists (Delivery) do not accept rides
-    }
+  // Fetch nearby pending requests (rides or orders)
+  const fetchNearbyRequests = async (lat: number, lon: number) => {
+    if (!driver?.token) return;
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/Ride/nearby-pending?latitude=${lat}&longitude=${lon}&radiusKm=10`, {
-        headers: { Authorization: `Bearer ${driver.token}` }
-      });
-      setRideRequests(response.data);
+      if (driver?.vehicleType === 'Delivery') {
+        const response = await axios.get(`${API_BASE_URL}/api/Order/nearby-prepared?latitude=${lat}&longitude=${lon}&radiusKm=10`, {
+          headers: { Authorization: `Bearer ${driver.token}` }
+        });
+        setRideRequests(response.data);
+      } else {
+        const response = await axios.get(`${API_BASE_URL}/api/Ride/nearby-pending?latitude=${lat}&longitude=${lon}&radiusKm=10`, {
+          headers: { Authorization: `Bearer ${driver.token}` }
+        });
+        setRideRequests(response.data);
+      }
     } catch (error) {
-      console.error('Error fetching nearby rides:', error);
+      console.error('Error fetching nearby requests:', error);
     }
   };
 
@@ -126,7 +131,7 @@ export default function MainScreen() {
 
       const loc = await Location.getCurrentPositionAsync({});
       setLocation(loc.coords);
-      fetchNearbyRides(loc.coords.latitude, loc.coords.longitude);
+      fetchNearbyRequests(loc.coords.latitude, loc.coords.longitude);
       updateDriverLocation(loc.coords.latitude, loc.coords.longitude);
 
       locationSubscription = await Location.watchPositionAsync(
@@ -145,31 +150,43 @@ export default function MainScreen() {
     };
   }, []);
 
-  // Fit markers when active ride changes
+  // Fit markers when active ride or active order changes
   useEffect(() => {
-    if (activeRide && location && mapRef.current) {
-      const coordinates = [
-        { latitude: location.latitude, longitude: location.longitude },
-        { latitude: activeRide.pickupLatitude, longitude: activeRide.pickupLongitude },
-        { latitude: activeRide.dropoffLatitude, longitude: activeRide.dropoffLongitude },
-      ];
-      mapRef.current.fitToCoordinates(coordinates, {
-        edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
-        animated: true,
-      });
+    if (location && mapRef.current) {
+      if (activeRide) {
+        const coordinates = [
+          { latitude: location.latitude, longitude: location.longitude },
+          { latitude: activeRide.pickupLatitude, longitude: activeRide.pickupLongitude },
+          { latitude: activeRide.dropoffLatitude, longitude: activeRide.dropoffLongitude },
+        ];
+        mapRef.current.fitToCoordinates(coordinates, {
+          edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
+          animated: true,
+        });
+      } else if (activeOrder && activeOrder.delivery) {
+        const coordinates = [
+          { latitude: location.latitude, longitude: location.longitude },
+          { latitude: activeOrder.delivery.pickupLatitude, longitude: activeOrder.delivery.pickupLongitude },
+          { latitude: activeOrder.delivery.dropoffLatitude, longitude: activeOrder.delivery.dropoffLongitude },
+        ];
+        mapRef.current.fitToCoordinates(coordinates, {
+          edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
+          animated: true,
+        });
+      }
     }
-  }, [activeRide, location]);
+  }, [activeRide, activeOrder, location]);
 
-  // Refresh pending rides periodically
+  // Refresh pending requests periodically
   useEffect(() => {
-    if (!location || activeRide) return;
+    if (!location || activeRide || (driver?.vehicleType === 'Delivery' && activeOrder)) return;
 
     const interval = setInterval(() => {
-      fetchNearbyRides(location.latitude, location.longitude);
+      fetchNearbyRequests(location.latitude, location.longitude);
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [location, activeRide]);
+  }, [location, activeRide, activeOrder, driver?.vehicleType]);
 
   // Connect to SignalR hub
   useEffect(() => {
@@ -255,6 +272,20 @@ export default function MainScreen() {
       connection?.stop();
     };
   }, [driver?.token]);
+
+  const handleAcceptOrder = async (orderId: string) => {
+    try {
+      const response = await axios.patch(`${API_BASE_URL}/api/Order/${orderId}/assign/${driver.driverId}`, {}, {
+        headers: { Authorization: `Bearer ${driver.token}` }
+      });
+      setActiveOrder(response.data);
+      setRideRequests([]);
+      Alert.alert('Order Accepted', 'Navigate to restaurant to pick up.');
+    } catch (error) {
+      console.error('Error accepting order:', error);
+      Alert.alert('Error', 'Could not accept order.');
+    }
+  };
 
   const handleUpdateOrderStatus = async (orderId: string, status: number) => {
     try {
@@ -359,16 +390,36 @@ export default function MainScreen() {
                   <Ionicons name="location" size={24} color="#10b981" />
                 </View>
               </Marker>
-              {(activeRide.status === 2 || activeRide.status === 'InProgress') && (
-                <Marker
-                  coordinate={{ latitude: activeRide.dropoffLatitude, longitude: activeRide.dropoffLongitude }}
-                  title="Dropoff"
-                >
-                  <View style={[styles.markerContainer, { borderColor: '#ef4444' }]}>
-                    <Ionicons name="flag" size={24} color="#ef4444" />
-                  </View>
-                </Marker>
-              )}
+              <Marker
+                coordinate={{ latitude: activeRide.dropoffLatitude, longitude: activeRide.dropoffLongitude }}
+                title="Dropoff"
+              >
+                <View style={[styles.markerContainer, { borderColor: '#ef4444' }]}>
+                  <Ionicons name="flag" size={24} color="#ef4444" />
+                </View>
+              </Marker>
+            </>
+          )}
+
+          {/* Active Order Markers */}
+          {activeOrder && activeOrder.delivery && (
+            <>
+              <Marker
+                coordinate={{ latitude: activeOrder.delivery.pickupLatitude, longitude: activeOrder.delivery.pickupLongitude }}
+                title="Restaurant Pickup"
+              >
+                <View style={[styles.markerContainer, { borderColor: '#f59e0b' }]}>
+                  <Ionicons name="restaurant" size={24} color="#f59e0b" />
+                </View>
+              </Marker>
+              <Marker
+                coordinate={{ latitude: activeOrder.delivery.dropoffLatitude, longitude: activeOrder.delivery.dropoffLongitude }}
+                title="Customer Dropoff"
+              >
+                <View style={[styles.markerContainer, { borderColor: '#ef4444' }]}>
+                  <Ionicons name="flag" size={24} color="#ef4444" />
+                </View>
+              </Marker>
             </>
           )}
         </MapView>
@@ -398,21 +449,21 @@ export default function MainScreen() {
                 </TouchableOpacity>
               </View>
 
-{(activeRide.status === 2 || activeRide.status === 'InProgress') ? (
-    <TouchableOpacity
-        style={[styles.completeButton, { backgroundColor: '#004AAD' }]}
-        onPress={() => handleStartRide(activeRide.id)}
-    >
-        <Text style={styles.buttonText}>Start Ride</Text>
-    </TouchableOpacity>
-) : (
-    <TouchableOpacity
-        style={[styles.completeButton, { backgroundColor: '#004AAD' }]}
-        onPress={() => handleStartRide(activeRide.id)}
-    >
-        <Text style={styles.buttonText}>Start Ride</Text>
-    </TouchableOpacity>
-)}
+              {(activeRide.status === 2 || activeRide.status === 'InProgress') ? (
+                <TouchableOpacity
+                  style={[styles.completeButton, { backgroundColor: '#10b981' }]}
+                  onPress={() => router.push({ pathname: '/active-ride' as any, params: { ride: JSON.stringify(activeRide) } })}
+                >
+                  <Text style={styles.buttonText}>Continue Ride →</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.completeButton, { backgroundColor: '#004AAD' }]}
+                  onPress={() => handleStartRide(activeRide.id)}
+                >
+                  <Text style={styles.buttonText}>Start Ride</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : activeOrder ? (
             <View style={styles.requestBox}>
@@ -427,52 +478,77 @@ export default function MainScreen() {
               </Text>
               
               <View style={styles.buttonContainer}>
-                {(activeOrder.delivery?.status === 0 || activeOrder.delivery?.status === 'Pending') ? (
-                  <TouchableOpacity 
-                    style={[styles.acceptButton, { backgroundColor: '#004AAD', flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }]} 
-                    onPress={() => handleUpdateOrderStatus(activeOrder.id, 4)} // Set to OutForDelivery (4) which automatically sets delivery.Status = RideStatus.Accepted
-                  >
-                    <Text style={styles.buttonText}>Accept Delivery Job</Text>
-                  </TouchableOpacity>
-                ) : (activeOrder.status === 3 || activeOrder.status === 'Prepared' || activeOrder.status === 2 || activeOrder.status === 'Received') ? (
+                {(activeOrder.status === 3 || activeOrder.status === 'Prepared' || activeOrder.status === 2 || activeOrder.status === 'Received') ? (
                   <TouchableOpacity 
                     style={[styles.acceptButton, { backgroundColor: '#f59e0b', flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }]} 
                     onPress={() => handleUpdateOrderStatus(activeOrder.id, 4)} // Set to OutForDelivery (4)
                   >
-                    <Text style={styles.buttonText}>Pick Up Order</Text>
+                    <Text style={styles.buttonText}>Confirm Order Picked Up</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity 
                     style={[styles.completeButton, { backgroundColor: '#10b981', flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }]} 
                     onPress={() => handleUpdateOrderStatus(activeOrder.id, 5)} // Set to Delivered (5)
                   >
-                    <Text style={styles.buttonText}>Mark as Delivered</Text>
+                    <Text style={styles.buttonText}>Confirm Order Delivered</Text>
                   </TouchableOpacity>
                 )}
               </View>
             </View>
           ) : rideRequests.length === 0 ? (
-            <Text style={styles.noRequests}>Looking for nearby rides...</Text>
+            <Text style={styles.noRequests}>
+              {driver?.vehicleType === 'Delivery' ? 'Looking for nearby orders...' : 'Looking for nearby rides...'}
+            </Text>
           ) : (
-            rideRequests.map((ride, index) => (
-              <View key={index} style={styles.requestBox}>
-                <Text style={styles.requestText}>
-                  <Text style={styles.label}>From: </Text>{ride.pickupLocation}
-                </Text>
-                <Text style={styles.requestText}>
-                  <Text style={styles.label}>To: </Text>{ride.dropoffLocation}
-                </Text>
-                
-                <View style={styles.buttonContainer}>
-                  <TouchableOpacity 
-                    style={styles.acceptButton} 
-                    onPress={() => handleAcceptRide(ride.id)}
-                  >
-                    <Text style={styles.buttonText}>Accept Ride</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
+            rideRequests.map((request, index) => {
+              if (driver?.vehicleType === 'Delivery') {
+                return (
+                  <View key={index} style={styles.requestBox}>
+                    <Text style={styles.requestText}>
+                      <Text style={styles.label}>Restaurant: </Text>{request.delivery?.senderName || request.delivery?.pickupAddress || 'Restaurant'}
+                    </Text>
+                    <Text style={styles.requestText}>
+                      <Text style={styles.label}>Pickup: </Text>{request.delivery?.pickupAddress}
+                    </Text>
+                    <Text style={styles.requestText}>
+                      <Text style={styles.label}>Deliver to: </Text>{request.delivery?.dropoffAddress}
+                    </Text>
+                    <Text style={styles.requestText}>
+                      <Text style={styles.label}>Items: </Text>{formatItemDescription(request.delivery?.itemDescription || '')}
+                    </Text>
+                    
+                    <View style={styles.buttonContainer}>
+                      <TouchableOpacity 
+                        style={styles.acceptButton} 
+                        onPress={() => handleAcceptOrder(request.id)}
+                      >
+                        <Text style={styles.buttonText}>Accept Delivery Job</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              } else {
+                return (
+                  <View key={index} style={styles.requestBox}>
+                    <Text style={styles.requestText}>
+                      <Text style={styles.label}>From: </Text>{request.pickupLocation}
+                    </Text>
+                    <Text style={styles.requestText}>
+                      <Text style={styles.label}>To: </Text>{request.dropoffLocation}
+                    </Text>
+                    
+                    <View style={styles.buttonContainer}>
+                      <TouchableOpacity 
+                        style={styles.acceptButton} 
+                        onPress={() => handleAcceptRide(request.id)}
+                      >
+                        <Text style={styles.buttonText}>Accept Ride</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              }
+            })
           )}
         </ScrollView>
       </View>
